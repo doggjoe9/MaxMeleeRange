@@ -12,11 +12,11 @@
   "DalamudApiLevel": 7,
   "IconUrl": "",
   "ImageUrls": [],
-  "DownloadLinkInstall": "https://github.com/doggjoe9/MaxMeleeRange/releases/download/Releases/latest.zip",
+  "DownloadLinkInstall": "",
   "IsHide": false,
   "IsTestingExclusive": false,
-  "DownloadLinkTesting": "https://github.com/doggjoe9/MaxMeleeRange/releases/download/Releases/latest.zip",
-  "DownloadLinkUpdate": "https://github.com/doggjoe9/MaxMeleeRange/releases/download/Releases/latest.zip",
+  "DownloadLinkTesting": "",
+  "DownloadLinkUpdate": "",
   "DownloadCount": 0,
   "LastUpdated": "0"
 }

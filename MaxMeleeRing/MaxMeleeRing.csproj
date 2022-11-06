@@ -34,12 +34,6 @@
    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
      <Optimize>False</Optimize>
    </PropertyGroup>
-  
-   <ItemGroup>
-     <Compile Remove="bin\**" />
-     <EmbeddedResource Remove="bin\**" />
-     <None Remove="bin\**" />
-   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="DalamudPackager" Version="2.1.8" />
