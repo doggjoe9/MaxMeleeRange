@@ -8,6 +8,7 @@ using Dalamud.Plugin;
 using ImGuiNET;
 using Lumina.Excel.GeneratedSheets;
 using System;
+using System.Drawing;
 using System.Globalization;
 using System.Numerics;
 
@@ -25,6 +26,7 @@ namespace MaxMeleeRing {
 		private uint colorIfFar;
 		private Vector4 colorIfClose4;
 		private Vector4 colorIfFar4;
+		private bool drawPlayerCircle;
 
 		private bool config = false;
 
@@ -58,6 +60,7 @@ namespace MaxMeleeRing {
 			colorIfFar = Services.Configuration.colorIfFar;
 			colorIfClose4 = ImGui.ColorConvertU32ToFloat4(colorIfClose);
 			colorIfFar4 = ImGui.ColorConvertU32ToFloat4(colorIfFar);
+			drawPlayerCircle = Services.Configuration.drawPlayerCircle;
 		}
 
 		private void SaveConfig() {
@@ -67,6 +70,7 @@ namespace MaxMeleeRing {
 			Services.Configuration.lineWidth = lineWidth;
 			Services.Configuration.colorIfClose = ImGui.GetColorU32(colorIfClose4);
 			Services.Configuration.colorIfFar = ImGui.GetColorU32(colorIfFar4);
+			Services.Configuration.drawPlayerCircle = drawPlayerCircle;
 			Services.Configuration.Save();
 			LoadConfig();
 		}
@@ -121,6 +125,10 @@ namespace MaxMeleeRing {
 				if (ImGui.IsItemHovered())
 					ImGui.SetTooltip("The amount of line segments used to draw the target's ring. Small values result in janky behavior and large values may cause performance issues.");
 
+				ImGui.Checkbox("Toggle Player Ring", ref drawPlayerCircle);
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip("On: Displays the play's Hitbox above their head. When this intersects with the target hitbox, you are within max melee.\nOff: Displays a dot with a line connecting it to the target hitbox. When this dot enters the target hitbox, you are within max melee.");
+
 				if (ImGui.Button("Save & Close")) {
 					SaveConfig();
 					config = false;
@@ -135,19 +143,24 @@ namespace MaxMeleeRing {
 				}
 			}
 			#endregion
-
 			#region Filter Classes
 			string cls = Services.ClientState.LocalPlayer?.ClassJob.GameData?.Abbreviation.ToString() ?? "ERR";
 			switch (cls) {
-				case "WHM":
-				case "SCH":
-				case "AST":
-				case "SGE":
-				case "BRD":
-				case "MCH":
-				case "DNC":
-				case "BLM":
-					return;
+				case "PLD": // Tanks
+				case "WAR":
+				case "DRK":
+				case "GNB":
+				case "MNK": // Melees
+				case "DRG":
+				case "NIN":
+				case "SAM":
+				case "RPR":
+				case "SMN": // Special
+				case "RDM":
+				case "BLU":
+					break; // only allow the above classes
+				default:
+					return; // otherwise, skip rendring the circle
 			}
 			#endregion
 			#region Render Circle
@@ -162,7 +175,10 @@ namespace MaxMeleeRing {
 
 			GameObject? localPlayer = Services.ClientState.LocalPlayer;
 			if (currentTargetActor != null && localPlayer != null) {
-				ImGuiMaxMeleeRing(currentTargetActor, localPlayer);
+				if (drawPlayerCircle)
+					ImGuiMaxMeleeRing(currentTargetActor, localPlayer);
+				else
+					ImGuiMaxMeleeRingNoPlayer(currentTargetActor, localPlayer);
 			}
 
 			ImGui.End();
@@ -174,6 +190,37 @@ namespace MaxMeleeRing {
 			GameObject? currentTarget = Services.TargetManager.Target;
 			currentTargetActor = currentTarget?.ObjectKind is ObjectKind.BattleNpc ? currentTarget : null;
 
+		}
+
+		private void ImGuiMaxMeleeRingNoPlayer(GameObject target, GameObject player) {
+			float playerRadius = player.HitboxRadius;
+			float targetRadius = target.HitboxRadius + 3.0f + playerRadius;
+			float heightOffset = player.Position.Y + height;
+
+			Vector2 playerPositionFlat = new Vector2(player.Position.X, player.Position.Z);
+			Vector2 targetPositionFlat = new Vector2(target.Position.X, target.Position.Z);
+
+			float targetDistanceToPlayerFlat = Vector2.Distance(playerPositionFlat, targetPositionFlat);
+
+			uint color = targetDistanceToPlayerFlat <= targetRadius ? colorIfClose : colorIfFar;
+
+			float seg = targetSegs * 0.5f;
+			for (int i = 0; i <= targetSegs; i++) {
+				Vector3 worldVertex = new Vector3(
+					target.Position.X + (targetRadius * (float) Math.Sin(i * Math.PI / seg)),
+					heightOffset,
+					target.Position.Z + (targetRadius * (float) Math.Cos(i * Math.PI / seg))
+				);
+				Services.GameGui.WorldToScreen(worldVertex, out Vector2 screenVertex);
+				ImGui.GetWindowDrawList().PathLineTo(screenVertex);
+			}
+			ImGui.GetWindowDrawList().PathStroke(color, ImDrawFlags.None, lineWidth);
+
+			Vector2 pointAtPlayerFlat = targetPositionFlat + targetRadius * Vector2.Normalize(playerPositionFlat - targetPositionFlat);
+			Services.GameGui.WorldToScreen(new Vector3(pointAtPlayerFlat.X, heightOffset, pointAtPlayerFlat.Y), out Vector2 screenSpaceTargetRingClosest);
+			Services.GameGui.WorldToScreen(player.Position + Vector3.UnitY * height, out Vector2 screenSpaceAboveHead);
+			ImGui.GetWindowDrawList().AddLine(screenSpaceTargetRingClosest, screenSpaceAboveHead, color, lineWidth);
+			ImGui.GetWindowDrawList().AddCircleFilled(screenSpaceAboveHead, lineWidth, color);
 		}
 
 		private void ImGuiMaxMeleeRing(GameObject target, GameObject player) {

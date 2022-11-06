@@ -12,6 +12,7 @@ namespace MaxMeleeRing {
 		public float lineWidth = 10.0f;
 		public uint colorIfClose = 0xFF00FF00;
 		public uint colorIfFar = 0xFF0000FF;
+		public bool drawPlayerCircle = true;
 
 		public Configuration() { }
 
