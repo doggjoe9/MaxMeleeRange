@@ -1,9 +1,7 @@
-﻿using Dalamud.Configuration;
-using Dalamud.Game;
+﻿using Dalamud.Game;
 using Dalamud.Interface;
 using Dalamud.Logging;
 using System;
-using System.IO;
 using System.Numerics;
 using System.Runtime.InteropServices;
 
