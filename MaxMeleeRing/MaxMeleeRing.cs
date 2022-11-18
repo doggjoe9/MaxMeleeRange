@@ -18,6 +18,7 @@ namespace MaxMeleeRing {
 		private int targetSegs;
 		private float height;
 		private float lineWidth;
+		private float zbias;
 		private bool relToTargetHeight;
 		private bool dashLine;
 		private bool drawSpokes;
@@ -84,6 +85,7 @@ namespace MaxMeleeRing {
 			targetSegs = Services.Configuration.targetSegs;
 			height = Services.Configuration.height;
 			lineWidth = Services.Configuration.lineWidth;
+			zbias = Services.Configuration.zbias;
 			colorIfClose = Services.Configuration.colorIfClose;
 			colorIfFar = Services.Configuration.colorIfFar;
 			northSpokeColor = Services.Configuration.northSpokeColor;
@@ -117,6 +119,7 @@ namespace MaxMeleeRing {
 			Services.Configuration.targetSegs = targetSegs;
 			Services.Configuration.height = height;
 			Services.Configuration.lineWidth = lineWidth;
+			Services.Configuration.zbias = zbias;
 			Services.Configuration.colorIfClose = ImGui.GetColorU32(colorIfClose4);
 			Services.Configuration.colorIfFar = ImGui.GetColorU32(colorIfFar4);
 			Services.Configuration.northSpokeColor = ImGui.GetColorU32(northSpokeColor4);
@@ -210,6 +213,10 @@ namespace MaxMeleeRing {
 				ImGui.SliderFloat("Line Width", ref lineWidth, 0.0f, 50.0f);
 				if (ImGui.IsItemHovered())
 					ImGui.SetTooltip("Thickness of the lines used to draw the rings. (CTRL + Click for manual entry)");
+
+				ImGui.SliderFloat("Z Bias", ref zbias, 0.0f, 10.0f);
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip("Used for culling invisible lines. Set this higher if you see lines dancing on the screen or flickering. Set this lower if lines disappear before they go out of view. (Default: 1.0).");
 
 				if (ringMode) {
 					ImGui.SliderInt("Player Resolution", ref playerSegs, 2, 9);
@@ -381,10 +388,10 @@ namespace MaxMeleeRing {
 			Vector3 endWeight = new Vector3(arcEnd.X + bezierConstant * arcEnd.Z, 0.0f, arcEnd.Z - bezierConstant * arcEnd.X);
 
 			bool validSegment = true;
-			Services.GameGui.WorldToScreen(center + arcStart, out Vector2 arcStartPoint);
-			Services.GameGui.WorldToScreen(center + arcEnd, out Vector2 arcEndPoint);
-			validSegment &= Services.GameGui.WorldToScreen(center + startWeight, out Vector2 startWeightPoint);
-			validSegment &= Services.GameGui.WorldToScreen(center + endWeight, out Vector2 endWeightPoint);
+			validSegment &= Services.BetterGameGui.WorldToScreen(center + arcStart, zbias, out Vector2 arcStartPoint);
+			validSegment &= Services.BetterGameGui.WorldToScreen(center + arcEnd, zbias, out Vector2 arcEndPoint);
+			validSegment &= Services.BetterGameGui.WorldToScreen(center + startWeight, zbias, out Vector2 startWeightPoint);
+			validSegment &= Services.BetterGameGui.WorldToScreen(center + endWeight, zbias, out Vector2 endWeightPoint);
 
 			if (validSegment)
 				ImGui.GetWindowDrawList().AddBezierCubic(arcStartPoint, startWeightPoint, endWeightPoint, arcEndPoint, color, lineWidth);
@@ -407,10 +414,10 @@ namespace MaxMeleeRing {
 			Vector3 endWeight = new Vector3(arcEnd.X + bezierConstant * arcEnd.Z, 0.0f, arcEnd.Z - bezierConstant * arcEnd.X);
 
 			bool validSegment = true;
-			Services.GameGui.WorldToScreen(center + arcStart, out Vector2 arcStartPoint);
-			Services.GameGui.WorldToScreen(center + arcEnd, out Vector2 arcEndPoint);
-			validSegment &= Services.GameGui.WorldToScreen(center + startWeight, out Vector2 startWeightPoint);
-			validSegment &= Services.GameGui.WorldToScreen(center + endWeight, out Vector2 endWeightPoint);
+			validSegment &= Services.BetterGameGui.WorldToScreen(center + arcStart, zbias, out Vector2 arcStartPoint);
+			validSegment &= Services.BetterGameGui.WorldToScreen(center + arcEnd, zbias, out Vector2 arcEndPoint);
+			validSegment &= Services.BetterGameGui.WorldToScreen(center + startWeight, zbias, out Vector2 startWeightPoint);
+			validSegment &= Services.BetterGameGui.WorldToScreen(center + endWeight, zbias, out Vector2 endWeightPoint);
 
 			if (validSegment)
 				ImGui.GetWindowDrawList().AddBezierCubic(arcStartPoint, startWeightPoint, endWeightPoint, arcEndPoint, color, lineWidth);
@@ -466,7 +473,10 @@ namespace MaxMeleeRing {
 			if (hideFarSpokes && Vector2.Dot(spoke, pointAtPlayerFlatNorm) < -0.382683432365f) // = cos(5pi/8 radians) = cos(112.5 degrees)
 				return;
 
-			Services.GameGui.WorldToScreen(target + targetRadius * new Vector3(spoke.X, 0.0f, spoke.Y), out Vector2 screenSpaceSpoke);
+			bool spokeVisible = Services.BetterGameGui.WorldToScreen(target + targetRadius * new Vector3(spoke.X, 0.0f, spoke.Y), zbias, out Vector2 screenSpaceSpoke);
+
+			if (!spokeVisible)
+				return;
 
 			ImGui.GetWindowDrawList().AddLine(screenSpaceTargetCenter, screenSpaceSpoke, color, lineWidth);
 			if (drawSpokeLabels) {
@@ -499,13 +509,13 @@ namespace MaxMeleeRing {
 			Vector3 playerCenter = new Vector3(player.Position.X, heightOffset, player.Position.Z);
 			Vector3 targetCenter = new Vector3(target.Position.X, heightOffset, target.Position.Z);
 
-			Services.GameGui.WorldToScreen(targetCenter, out Vector2 screenSpaceTargetCenter);
+			bool targetCenterVisible = Services.BetterGameGui.WorldToScreen(targetCenter, zbias, out Vector2 screenSpaceTargetCenter);
 			Vector2 pointAtPlayerFlatNorm = Vector2.Normalize(playerPositionFlat - targetPositionFlat);
 
-			if (drawTargetOrientation)
+			if (drawTargetOrientation && targetCenterVisible)
 				DrawSpoke(MathF.PI - target.Rotation, pointAtPlayerFlatNorm, targetCenter, targetRadius, screenSpaceTargetCenter, targetOrientationColor, "");
 
-			if (drawSpokes) {
+			if (drawSpokes && targetCenterVisible) {
 				DrawSpoke(0.000000000000f, pointAtPlayerFlatNorm, targetCenter, targetRadius, screenSpaceTargetCenter, northSpokeColor, "N");
 				DrawSpoke(1.570796326790f, pointAtPlayerFlatNorm, targetCenter, targetRadius, screenSpaceTargetCenter, cardinalSpokeColor, "E");
 				DrawSpoke(3.141592653590f, pointAtPlayerFlatNorm, targetCenter, targetRadius, screenSpaceTargetCenter, cardinalSpokeColor, "S");
@@ -538,145 +548,23 @@ namespace MaxMeleeRing {
 				} else {
 					pointAtTargetFlat = playerPositionFlat - playerRadius * pointAtPlayerFlatNorm;
 				}
-				Services.GameGui.WorldToScreen(new Vector3(pointAtTargetFlat.X, heightOffset, pointAtTargetFlat.Y), out Vector2 screenSpaceAboveHead);
-				Services.GameGui.WorldToScreen(new Vector3(pointAtPlayerFlat.X, heightOffset, pointAtPlayerFlat.Y), out Vector2 screenSpaceTargetRingClosest);
-				ImGui.GetWindowDrawList().AddLine(screenSpaceTargetRingClosest, screenSpaceAboveHead, color, lineWidth);
-				if (isInMaxMelee && (!playerCenterDot || !drawDotInsideHitbox))
+				bool aboveHeadVisible = Services.BetterGameGui.WorldToScreen(new Vector3(pointAtTargetFlat.X, heightOffset, pointAtTargetFlat.Y), zbias, out Vector2 screenSpaceAboveHead);
+				bool targetRingClosestVisible = Services.BetterGameGui.WorldToScreen(new Vector3(pointAtPlayerFlat.X, heightOffset, pointAtPlayerFlat.Y), zbias, out Vector2 screenSpaceTargetRingClosest);
+				if (aboveHeadVisible && targetRingClosestVisible) {
+					ImGui.GetWindowDrawList().AddLine(screenSpaceTargetRingClosest, screenSpaceAboveHead, color, lineWidth);
+				}
+				
+				if (isInMaxMelee && aboveHeadVisible && (!playerCenterDot || !drawDotInsideHitbox))
 					ImGui.GetWindowDrawList().AddCircleFilled(screenSpaceAboveHead, lineWidth, color);
-				if (!forceDrawTargetRing && Math.Abs(targetDistanceToPlayerFlat - targetRadius) < playerRadius)
+				if (targetRingClosestVisible && !forceDrawTargetRing && Math.Abs(targetDistanceToPlayerFlat - targetRadius) < playerRadius)
 					ImGui.GetWindowDrawList().AddCircleFilled(screenSpaceTargetRingClosest, lineWidth, color);
 			}
 
 			if ((playerCenterDot || !ringMode) && (drawDotInsideHitbox || !isInHitbox)) {
-				Services.GameGui.WorldToScreen(playerCenter, out Vector2 screenSpaceAboveHead);
-				ImGui.GetWindowDrawList().AddCircleFilled(screenSpaceAboveHead, lineWidth, color);
-			}
-		}
-
-		// Deprecated in favor of Bezier
-		/*
-		private void ImGuiMaxMeleeRingNoPlayer(GameObject target, GameObject player) {
-			float playerRadius = player.HitboxRadius;
-			float targetRadius = target.HitboxRadius + 3.0f + playerRadius;
-			float heightOffset = relToTargetHeight ? target.Position.Y : player.Position.Y;
-			heightOffset += height;
-
-			Vector2 playerPositionFlat = new Vector2(player.Position.X, player.Position.Z);
-			Vector2 targetPositionFlat = new Vector2(target.Position.X, target.Position.Z);
-
-			float targetDistanceToPlayerFlat = Vector2.Distance(playerPositionFlat, targetPositionFlat);
-
-			bool isInHitbox = targetDistanceToPlayerFlat <= targetRadius;
-
-			uint color = targetDistanceToPlayerFlat <= targetRadius ? colorIfClose : colorIfFar;
-
-			float seg = targetSegs * 0.5f;
-			for (int i = 0; i <= targetSegs; i++) {
-				Vector3 worldVertex = new Vector3(
-					target.Position.X + (targetRadius * (float) Math.Sin(i * Math.PI / seg)),
-					heightOffset,
-					target.Position.Z + (targetRadius * (float) Math.Cos(i * Math.PI / seg))
-				);
-				Services.GameGui.WorldToScreen(worldVertex, out Vector2 screenVertex);
-				ImGui.GetWindowDrawList().PathLineTo(screenVertex);
-			}
-			ImGui.GetWindowDrawList().PathStroke(color, ImDrawFlags.None, lineWidth);
-
-			Services.GameGui.WorldToScreen(new Vector3(playerPositionFlat.X, heightOffset, playerPositionFlat.Y), out Vector2 screenSpaceAboveHead);
-			if (dashLine && (drawDashLineInsideHitbox || !isInHitbox)) {
-				Vector2 pointAtPlayerFlat = targetPositionFlat + targetRadius * Vector2.Normalize(playerPositionFlat - targetPositionFlat);
-				Services.GameGui.WorldToScreen(new Vector3(pointAtPlayerFlat.X, heightOffset, pointAtPlayerFlat.Y), out Vector2 screenSpaceTargetRingClosest);
-				ImGui.GetWindowDrawList().AddLine(screenSpaceTargetRingClosest, screenSpaceAboveHead, color, lineWidth);
-			}
-			if (drawDotInsideHitbox || !isInHitbox || (dashLine && drawDashLineInsideHitbox))
-				ImGui.GetWindowDrawList().AddCircleFilled(screenSpaceAboveHead, lineWidth, color);
-		}
-
-		private void ImGuiMaxMeleeRing(GameObject target, GameObject player) {
-			float playerRadius = player.HitboxRadius;
-			float targetRadius = target.HitboxRadius;
-			float heightOffset = relToTargetHeight ? target.Position.Y : player.Position.Y;
-			heightOffset += height;
-
-			if (playerReach)
-				playerRadius += 3.0f;
-			else
-				targetRadius += 3.0f;
-
-			Vector2 playerPositionFlat = new Vector2(player.Position.X, player.Position.Z);
-			Vector2 targetPositionFlat = new Vector2(target.Position.X, target.Position.Z);
-
-			float targetDistanceToPlayerFlat = Vector2.Distance(playerPositionFlat, targetPositionFlat);
-
-			bool isInHitbox = targetDistanceToPlayerFlat <= targetRadius;
-			bool isInMaxMelee = targetDistanceToPlayerFlat <= playerRadius + targetRadius;
-
-			uint color = isInMaxMelee ? colorIfClose : colorIfFar;
-
-			float seg = playerSegs * 0.5f;
-			for (int i = 0; i <= playerSegs; i++) {
-				Vector2 worldVertexFlat = new Vector2(
-					player.Position.X + (playerRadius * (float) Math.Sin(i * Math.PI / seg)),
-					player.Position.Z + (playerRadius * (float) Math.Cos(i * Math.PI / seg))
-				);
-
-				if (Vector2.Distance(worldVertexFlat, targetPositionFlat) < targetRadius * 1.0f) {
-					ImGui.GetWindowDrawList().PathStroke(color, ImDrawFlags.None, lineWidth);
-					continue;
-				}
-					
-
-				Vector3 worldVertex = new Vector3(worldVertexFlat.X, heightOffset, worldVertexFlat.Y);
-				Services.GameGui.WorldToScreen(worldVertex, out Vector2 screenVertex);
-				ImGui.GetWindowDrawList().PathLineTo(screenVertex);
-			}
-			ImGui.GetWindowDrawList().PathStroke(color, ImDrawFlags.None, lineWidth);
-
-			seg = targetSegs * 0.5f;
-			for (int i = 0; i <= targetSegs; i++) {
-				Vector2 worldVertexFlat = new Vector2(
-					target.Position.X + (targetRadius * (float) Math.Sin(i * Math.PI / seg)),
-					target.Position.Z + (targetRadius * (float) Math.Cos(i * Math.PI / seg))
-				);
-
-				if (!forceDrawTargetRing && Vector2.Distance(worldVertexFlat, playerPositionFlat) < playerRadius * 1.0f) {
-					ImGui.GetWindowDrawList().PathStroke(color, ImDrawFlags.None, lineWidth);
-					continue;
-				}
-					
-
-				Vector3 worldVertex = new Vector3(worldVertexFlat.X, heightOffset, worldVertexFlat.Y);
-				Services.GameGui.WorldToScreen(worldVertex, out Vector2 screenVertex);
-				ImGui.GetWindowDrawList().PathLineTo(screenVertex);
-			}
-			ImGui.GetWindowDrawList().PathStroke(color, ImDrawFlags.None, lineWidth);
-
-			if (dashLine && (drawDashLineInsideHitbox || !isInHitbox)) {
-				Vector2 pointAtPlayerFlatNorm = Vector2.Normalize(playerPositionFlat - targetPositionFlat);
-				Vector2 pointAtPlayerFlat = targetPositionFlat + targetRadius * pointAtPlayerFlatNorm;
-				Vector2 pointAtTargetFlat;
-				if (isInMaxMelee) {
-					//if (playerReach)
-					//	pointAtPlayerFlat = targetPositionFlat;
-					pointAtTargetFlat = playerPositionFlat;
-				} else {
-					pointAtTargetFlat = playerPositionFlat - playerRadius * pointAtPlayerFlatNorm;
-				}
-				Services.GameGui.WorldToScreen(new Vector3(pointAtTargetFlat.X, heightOffset, pointAtTargetFlat.Y), out Vector2 screenSpaceAboveHead);
-				Services.GameGui.WorldToScreen(new Vector3(pointAtPlayerFlat.X, heightOffset, pointAtPlayerFlat.Y), out Vector2 screenSpaceTargetRingClosest);
-				ImGui.GetWindowDrawList().AddLine(screenSpaceTargetRingClosest, screenSpaceAboveHead, color, lineWidth);
-				if (isInMaxMelee && (!playerCenterDot || !drawDotInsideHitbox))
+				if (Services.BetterGameGui.WorldToScreen(playerCenter, zbias, out Vector2 screenSpaceAboveHead))
 					ImGui.GetWindowDrawList().AddCircleFilled(screenSpaceAboveHead, lineWidth, color);
-				if (!forceDrawTargetRing && Math.Abs(targetDistanceToPlayerFlat - targetRadius) < playerRadius)
-					ImGui.GetWindowDrawList().AddCircleFilled(screenSpaceTargetRingClosest, lineWidth, color);
-			}
-
-			if (playerCenterDot && (drawDotInsideHitbox || !isInHitbox)) {
-				Services.GameGui.WorldToScreen(new Vector3(playerPositionFlat.X, heightOffset, playerPositionFlat.Y), out Vector2 screenSpaceAboveHead);
-				ImGui.GetWindowDrawList().AddCircleFilled(screenSpaceAboveHead, lineWidth, color);
 			}
 		}
-		*/
 		#endregion
 	}
 }

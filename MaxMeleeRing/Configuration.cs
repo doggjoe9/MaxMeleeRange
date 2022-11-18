@@ -10,6 +10,7 @@ namespace MaxMeleeRing {
 		public int targetSegs = 27;
 		public float height = 2.0f;
 		public float lineWidth = 10.0f;
+		public float zbias = 1.0f;
 		public uint colorIfClose = 0xFF00FF00;
 		public uint colorIfFar = 0xFF0000FF;
 		public uint northSpokeColor = 0x7F00FFFF;
