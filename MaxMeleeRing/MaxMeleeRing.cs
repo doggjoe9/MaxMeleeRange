@@ -1,17 +1,11 @@
-using Dalamud.Game.ClientState.JobGauge.Enums;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Command;
 using Dalamud.Interface;
-using Dalamud.Logging;
 using Dalamud.Plugin;
 using ImGuiNET;
-using Lumina.Excel.GeneratedSheets;
 using System;
-using System.Drawing;
-using System.Globalization;
 using System.Numerics;
-using System.Reflection.Metadata.Ecma335;
 
 namespace MaxMeleeRing {
 	public sealed class MaxMeleeRing : IDalamudPlugin {
@@ -19,18 +13,38 @@ namespace MaxMeleeRing {
 		public string Name => "Max Melee Ring";
 		private const string CommandName = "/mmr";
 
+		// general
 		private int playerSegs;
 		private int targetSegs;
 		private float height;
 		private float lineWidth;
-		private uint colorIfClose;
-		private uint colorIfFar;
-		private Vector4 colorIfClose4;
-		private Vector4 colorIfFar4;
 		private bool relToTargetHeight;
 		private bool dashLine;
-		private bool drawDashLineInsideHitbox;		// Requires dash line
+		private bool drawSpokes;
+		private bool drawTargetOrientation;
 		private bool ringMode;
+
+		// color
+		private uint colorIfClose;
+		private uint colorIfFar;
+		private uint northSpokeColor;
+		private uint cardinalSpokeColor;
+		private uint intercardinalSpokeColor;
+		private uint targetOrientationColor;
+		private Vector4 colorIfClose4;
+		private Vector4 colorIfFar4;
+		private Vector4 northSpokeColor4;
+		private Vector4 cardinalSpokeColor4;
+		private Vector4 intercardinalSpokeColor4;
+		private Vector4 targetOrientationColor4;
+		
+		// dash line
+		private bool drawDashLineInsideHitbox;
+		
+		// spokes
+		private bool hideFarSpokes;
+		private bool drawSpokeLabels;
+		private bool bossRelativeSpokes;
 
 		// Ring Mode Settings
 		private bool playerReach;
@@ -39,8 +53,10 @@ namespace MaxMeleeRing {
 		private bool drawPlayerRingInsideHitbox;
 
 		// Dot mode Settings
-		private bool drawDotInsideHitbox;	// Requires player center dot on or dot mode
+		private bool drawDotInsideHitbox;
+		
 
+		//state
 		private bool config = false;
 
 		private GameObject? currentTargetActor;
@@ -70,11 +86,24 @@ namespace MaxMeleeRing {
 			lineWidth = Services.Configuration.lineWidth;
 			colorIfClose = Services.Configuration.colorIfClose;
 			colorIfFar = Services.Configuration.colorIfFar;
+			northSpokeColor = Services.Configuration.northSpokeColor;
+			cardinalSpokeColor = Services.Configuration.cardinalSpokeColor;
+			intercardinalSpokeColor = Services.Configuration.intercardinalSpokeColor;
+			targetOrientationColor = Services.Configuration.targetOrientationColor;
 			colorIfClose4 = ImGui.ColorConvertU32ToFloat4(colorIfClose);
 			colorIfFar4 = ImGui.ColorConvertU32ToFloat4(colorIfFar);
+			northSpokeColor4 = ImGui.ColorConvertU32ToFloat4(northSpokeColor);
+			cardinalSpokeColor4 = ImGui.ColorConvertU32ToFloat4(cardinalSpokeColor);
+			intercardinalSpokeColor4 = ImGui.ColorConvertU32ToFloat4(intercardinalSpokeColor);
+			targetOrientationColor4 = ImGui.ColorConvertU32ToFloat4(targetOrientationColor);
 			relToTargetHeight = Services.Configuration.relToTargetHeight;
 			dashLine = Services.Configuration.dashLine;
 			drawDashLineInsideHitbox = Services.Configuration.drawDashLineInsideHitbox;
+			drawSpokes = Services.Configuration.drawSpokes;
+			drawTargetOrientation = Services.Configuration.drawTargetOrientation;
+			hideFarSpokes = Services.Configuration.hideFarSpokes;
+			drawSpokeLabels = Services.Configuration.drawSpokeLabels;
+			bossRelativeSpokes = Services.Configuration.bossRelativeSpokes;
 			ringMode = Services.Configuration.ringMode;
 			playerReach = Services.Configuration.playerReach;
 			playerCenterDot = Services.Configuration.playerCenterDot;
@@ -90,6 +119,10 @@ namespace MaxMeleeRing {
 			Services.Configuration.lineWidth = lineWidth;
 			Services.Configuration.colorIfClose = ImGui.GetColorU32(colorIfClose4);
 			Services.Configuration.colorIfFar = ImGui.GetColorU32(colorIfFar4);
+			Services.Configuration.northSpokeColor = ImGui.GetColorU32(northSpokeColor4);
+			Services.Configuration.cardinalSpokeColor = ImGui.GetColorU32(cardinalSpokeColor4);
+			Services.Configuration.intercardinalSpokeColor = ImGui.GetColorU32(intercardinalSpokeColor4);
+			Services.Configuration.targetOrientationColor = ImGui.GetColorU32(targetOrientationColor4);
 			Services.Configuration.relToTargetHeight = relToTargetHeight;
 			Services.Configuration.dashLine = dashLine;
 			Services.Configuration.drawDashLineInsideHitbox = drawDashLineInsideHitbox;
@@ -99,6 +132,11 @@ namespace MaxMeleeRing {
 			Services.Configuration.forceDrawTargetRing = forceDrawTargetRing;
 			Services.Configuration.drawDotInsideHitbox = drawDotInsideHitbox;
 			Services.Configuration.drawPlayerRingInsideHitbox = drawPlayerRingInsideHitbox;
+			Services.Configuration.drawSpokes = drawSpokes;
+			Services.Configuration.drawSpokeLabels = drawSpokeLabels;
+			Services.Configuration.bossRelativeSpokes = bossRelativeSpokes;
+			Services.Configuration.hideFarSpokes = hideFarSpokes;
+			Services.Configuration.drawTargetOrientation = drawTargetOrientation;
 			Services.Configuration.Save();
 			LoadConfig();
 		}
@@ -139,6 +177,30 @@ namespace MaxMeleeRing {
 					ImGui.SetTooltip("What color should the rings be when the player is beyond max melee range?");
 				colorIfFar = ImGui.GetColorU32(colorIfFar4);
 
+				if (drawTargetOrientation) {
+					ImGui.NewLine();
+					ImGui.ColorEdit4("Target Orientation Color", ref targetOrientationColor4);
+					if (ImGui.IsItemHovered())
+						ImGui.SetTooltip("What color should the target orientation be?");
+					targetOrientationColor = ImGui.GetColorU32(targetOrientationColor4);
+				}
+
+				if (drawSpokes) {
+					ImGui.NewLine();
+					ImGui.ColorEdit4("North Spoke Color", ref northSpokeColor4);
+					if (ImGui.IsItemHovered())
+						ImGui.SetTooltip("What color should the north facing spoke be?");
+					northSpokeColor = ImGui.GetColorU32(northSpokeColor4);
+					ImGui.ColorEdit4("Cardinal Spoke Color", ref cardinalSpokeColor4);
+					if (ImGui.IsItemHovered())
+						ImGui.SetTooltip("What color should the cardinal facing spokes be?");
+					cardinalSpokeColor = ImGui.GetColorU32(cardinalSpokeColor4);
+					ImGui.ColorEdit4("Intercardinal Spoke Color", ref intercardinalSpokeColor4);
+					if (ImGui.IsItemHovered())
+						ImGui.SetTooltip("What color should the intercardinal facing spokes be?");
+					intercardinalSpokeColor = ImGui.GetColorU32(intercardinalSpokeColor4);
+				}
+
 				ImGui.NewLine();
 
 				ImGui.SliderFloat("Height Offset", ref height, -15.0f, 15.0f);
@@ -149,9 +211,11 @@ namespace MaxMeleeRing {
 				if (ImGui.IsItemHovered())
 					ImGui.SetTooltip("Thickness of the lines used to draw the rings. (CTRL + Click for manual entry)");
 
-				ImGui.SliderInt("Player Resolution", ref playerSegs, 2, 9);
-				if (ImGui.IsItemHovered())
-					ImGui.SetTooltip("The amount of line segments used to draw the player's ring. Small values result in janky behavior and large values may cause performance issues. (CTRL + Click for manual entry)");
+				if (ringMode) {
+					ImGui.SliderInt("Player Resolution", ref playerSegs, 2, 9);
+					if (ImGui.IsItemHovered())
+						ImGui.SetTooltip("The amount of line segments used to draw the player's ring. Small values result in janky behavior and large values may cause performance issues. (CTRL + Click for manual entry)");
+				}
 
 				ImGui.SliderInt("Target Resolution", ref targetSegs, 3, 50);
 				if (ImGui.IsItemHovered())
@@ -163,6 +227,10 @@ namespace MaxMeleeRing {
 				if (ImGui.IsItemHovered())
 					ImGui.SetTooltip("Draws the rings based on the target's elevation, rather than your own.");
 
+				ImGui.Checkbox("Target Orientation Line", ref drawTargetOrientation);
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip("Draws a line in the direction the target is looking.");
+
 				ImGui.Checkbox("Dash Line", ref dashLine);
 				if (ImGui.IsItemHovered())
 					ImGui.SetTooltip("Draws a line between you and the boss for help with lining up dashes.");
@@ -172,6 +240,24 @@ namespace MaxMeleeRing {
 					ImGui.Checkbox("Inside Hitbox?", ref drawDashLineInsideHitbox);
 					if (ImGui.IsItemHovered())
 						ImGui.SetTooltip("Draw the dash line inside of the target hitbox?.");
+					ImGui.Unindent();
+				}
+
+				ImGui.Checkbox("Directional Spokes", ref drawSpokes);
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip("Draws spokes indicating the orientation of the target.");
+
+				if (drawSpokes) {
+					ImGui.Indent();
+					ImGui.Checkbox("Hide Far", ref hideFarSpokes);
+					if (ImGui.IsItemHovered())
+						ImGui.SetTooltip("Hide spokes on the opposite side of the target from you.");
+					ImGui.Checkbox("Draw Labels", ref drawSpokeLabels);
+					if (ImGui.IsItemHovered())
+						ImGui.SetTooltip("Draws letters indicating the cardinal direction of each spoke.");
+					//ImGui.Checkbox("Boss Relative", ref bossRelativeSpokes);
+					//if (ImGui.IsItemHovered())
+					//	ImGui.SetTooltip("(UNUSED) Spokes will be rotated with the boss. Labels will still display the closest true cardinal direction.");
 					ImGui.Unindent();
 				}
 
@@ -374,6 +460,20 @@ namespace MaxMeleeRing {
 				DrawImGuiCircleSegmentBezier(center, i * MathF.PI / halfNumSegments, (i + 1) * MathF.PI / halfNumSegments, radius, color);
 		}
 
+		private void DrawSpoke(float spokeAngle, Vector2 pointAtPlayerFlatNorm, Vector3 target, float targetRadius, Vector2 screenSpaceTargetCenter, uint color, string label) {
+			Vector2 spoke = new Vector2(MathF.Sin(spokeAngle), -MathF.Cos(spokeAngle));
+
+			if (hideFarSpokes && Vector2.Dot(spoke, pointAtPlayerFlatNorm) < -0.382683432365f) // = cos(5pi/8 radians) = cos(112.5 degrees)
+				return;
+
+			Services.GameGui.WorldToScreen(target + targetRadius * new Vector3(spoke.X, 0.0f, spoke.Y), out Vector2 screenSpaceSpoke);
+
+			ImGui.GetWindowDrawList().AddLine(screenSpaceTargetCenter, screenSpaceSpoke, color, lineWidth);
+			if (drawSpokeLabels) {
+				ImGui.GetWindowDrawList().AddText((screenSpaceTargetCenter + screenSpaceSpoke) * 0.5f, 0xFFFFFFFF, label);
+			}
+		}
+
 		private void ImGuiMaxMelee(GameObject target, GameObject player) {
 			float playerRadius = ringMode ? player.HitboxRadius : 0.0f;
 			float targetRadius = ringMode ? target.HitboxRadius : target.HitboxRadius + player.HitboxRadius;
@@ -399,6 +499,23 @@ namespace MaxMeleeRing {
 			Vector3 playerCenter = new Vector3(player.Position.X, heightOffset, player.Position.Z);
 			Vector3 targetCenter = new Vector3(target.Position.X, heightOffset, target.Position.Z);
 
+			Services.GameGui.WorldToScreen(targetCenter, out Vector2 screenSpaceTargetCenter);
+			Vector2 pointAtPlayerFlatNorm = Vector2.Normalize(playerPositionFlat - targetPositionFlat);
+
+			if (drawTargetOrientation)
+				DrawSpoke(MathF.PI - target.Rotation, pointAtPlayerFlatNorm, targetCenter, targetRadius, screenSpaceTargetCenter, targetOrientationColor, "");
+
+			if (drawSpokes) {
+				DrawSpoke(0.000000000000f, pointAtPlayerFlatNorm, targetCenter, targetRadius, screenSpaceTargetCenter, northSpokeColor, "N");
+				DrawSpoke(1.570796326790f, pointAtPlayerFlatNorm, targetCenter, targetRadius, screenSpaceTargetCenter, cardinalSpokeColor, "E");
+				DrawSpoke(3.141592653590f, pointAtPlayerFlatNorm, targetCenter, targetRadius, screenSpaceTargetCenter, cardinalSpokeColor, "S");
+				DrawSpoke(4.712388980380f, pointAtPlayerFlatNorm, targetCenter, targetRadius, screenSpaceTargetCenter, cardinalSpokeColor, "W");
+				DrawSpoke(0.785398163397f, pointAtPlayerFlatNorm, targetCenter, targetRadius, screenSpaceTargetCenter, intercardinalSpokeColor, "NE");
+				DrawSpoke(2.356194490190f, pointAtPlayerFlatNorm, targetCenter, targetRadius, screenSpaceTargetCenter, intercardinalSpokeColor, "SE");
+				DrawSpoke(3.926990816990f, pointAtPlayerFlatNorm, targetCenter, targetRadius, screenSpaceTargetCenter, intercardinalSpokeColor, "SW");
+				DrawSpoke(5.497787143780f, pointAtPlayerFlatNorm, targetCenter, targetRadius, screenSpaceTargetCenter, intercardinalSpokeColor, "NW");
+			}
+
 			if (ringMode) {
 				if (forceDrawTargetRing)
 					DrawBezierCircleSimple(targetCenter, targetRadius, color, targetSegs);
@@ -409,11 +526,9 @@ namespace MaxMeleeRing {
 					DrawCircleAdvanced(playerCenter, -toPlayerNorm, playerRadius, targetRadius, targetDistanceToPlayerFlat, color, playerSegs);
 			} else {
 				DrawBezierCircleSimple(targetCenter, targetRadius, color, targetSegs);
-
 			}
 
 			if (dashLine && (drawDashLineInsideHitbox || !isInHitbox)) {
-				Vector2 pointAtPlayerFlatNorm = Vector2.Normalize(playerPositionFlat - targetPositionFlat);
 				Vector2 pointAtPlayerFlat = targetPositionFlat + targetRadius * pointAtPlayerFlatNorm;
 				Vector2 pointAtTargetFlat;
 				if (isInMaxMelee) {
@@ -433,7 +548,7 @@ namespace MaxMeleeRing {
 			}
 
 			if ((playerCenterDot || !ringMode) && (drawDotInsideHitbox || !isInHitbox)) {
-				Services.GameGui.WorldToScreen(new Vector3(playerPositionFlat.X, heightOffset, playerPositionFlat.Y), out Vector2 screenSpaceAboveHead);
+				Services.GameGui.WorldToScreen(playerCenter, out Vector2 screenSpaceAboveHead);
 				ImGui.GetWindowDrawList().AddCircleFilled(screenSpaceAboveHead, lineWidth, color);
 			}
 		}
