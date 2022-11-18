@@ -5,7 +5,7 @@
     "Punchline": "Draws the max melee range.",
     "Description": "While you are on a tank or melee class (or Summoner, Red Mage, or Blue Mage) this plugin will draw a ring around you and your target. The ring around your target indicates the max melee distance, and the ring around you indicates your hitbox. When these two rings overlap, you are in max melee. The rings will switch to configurable colors depending on if you are within max melee range or not.",
     "InternalName": "MaxMeleeRing",
-    "AssemblyVersion": "1.0.1.0",
+    "AssemblyVersion": "1.0.2.0",
     "RepoUrl": "https://github.com/doggjoe9/MaxMeleeRange",
     "ApplicableVersion": "any",
     "DalamudApiLevel": 7,
@@ -15,7 +15,7 @@
     "DownloadLinkTesting": "https://github.com/doggjoe9/MaxMeleeRange/releases/latest/download/latest.zip",
     "DownloadLinkUpdate": "https://github.com/doggjoe9/MaxMeleeRange/releases/latest/download/latest.zip",
     "DownloadCount": 0,
-    "LastUpdated": "1667813105",
-    "Changelog": "Major update. Added new options and improved efficiency and looks by using bezier curves to draw the rings."
+    "LastUpdated": "1668732768",
+    "Changelog": "Added 2 new features:\n - (Feature) Target orientation tracking\n - (Feature) Display true cards/intercards on target hitbox\n - (Fix) Made certain settings disappear when they aren't relevant."
   }
 ]
