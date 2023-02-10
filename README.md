@@ -1,3 +1,5 @@
+# Warning
+This plugin is out of date and has a memory leak somewhere that I can't be bothered to figure out right now.
 # Installation Instructions
 Use the `/xlplugins` command to open the Plugin Installer. Find the `Settings` button at the bottom to open Dalamud Settings. In the `Experimental` tab, scroll down to where it says `Custom Plugin Repositories`. Find the bottom-most text entry box and paste the following link into it
 > https://raw.githubusercontent.com/doggjoe9/MaxMeleeRange/master/MaxMeleeRing/repo.json
